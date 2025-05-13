@@ -2,10 +2,10 @@ ffmpeg-python
 Flask
 Flask_Cors
 gradio>=3.7.0
-numpy==1.23.5
+numpy
 pyworld
-scipy==1.10.0
-SoundFile==0.12.1
+scipy
+SoundFile
 torch
 torchaudio
 torchcrepe
@@ -18,7 +18,7 @@ onnx
 onnxsim
 onnxoptimizer
 fairseq==0.12.2
-librosa==0.9.1
+librosa
 tensorboard
 tensorboardX
 transformers
