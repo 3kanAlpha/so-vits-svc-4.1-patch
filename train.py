@@ -32,6 +32,7 @@ global_step = 0
 start_time = time.time()
 
 # os.environ['TORCH_DISTRIBUTED_DEBUG'] = 'INFO'
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3" # supress logs
 
 safe_globals = [
     torch._utils._rebuild_tensor_v2,
