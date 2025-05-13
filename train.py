@@ -2,6 +2,7 @@ import logging
 import multiprocessing
 import os
 import time
+import collections
 
 import torch
 import torch.distributed as dist
@@ -11,6 +12,7 @@ from torch.nn import functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+import torch._utils
 
 import modules.commons as commons
 import utils
@@ -31,6 +33,13 @@ start_time = time.time()
 
 # os.environ['TORCH_DISTRIBUTED_DEBUG'] = 'INFO'
 
+safe_globals = [
+    torch._utils._rebuild_tensor_v2,
+    torch.LongStorage,
+    torch.FloatStorage,
+    collections.OrderedDict,
+]
+torch.serialization.add_safe_globals(safe_globals=safe_globals)
 
 def main():
     """Assume Single Node Multi GPUs Training Only"""
