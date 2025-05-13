@@ -60,10 +60,12 @@ def plot_data_to_numpy(x, y):
     plt.tight_layout()
 
     fig.canvas.draw()
-    data = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
-    data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+    rgba_buf = fig.canvas.buffer_rgba()
+    data = np.frombuffer(rgba_buf, dtype=np.uint8)
+    data = data.reshape(fig.canvas.get_width_height()[::-1] + (4,))
+    rgb_data = data[:, :, :3]
     plt.close()
-    return data
+    return rgb_data
 
 
 def f0_to_coarse(f0):
@@ -154,7 +156,7 @@ def get_speech_encoder(speech_encoder,device=None,**kargs):
 
 def load_checkpoint(checkpoint_path, model, optimizer=None, skip_optimizer=False):
     assert os.path.isfile(checkpoint_path)
-    checkpoint_dict = torch.load(checkpoint_path, map_location='cpu')
+    checkpoint_dict = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
     iteration = checkpoint_dict['iteration']
     learning_rate = checkpoint_dict['learning_rate']
     if optimizer is not None and not skip_optimizer and checkpoint_dict['optimizer'] is not None:
@@ -263,10 +265,12 @@ def plot_spectrogram_to_numpy(spectrogram):
   plt.tight_layout()
 
   fig.canvas.draw()
-  data = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
-  data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+  rgba_buf = fig.canvas.buffer_rgba()
+  data = np.frombuffer(rgba_buf, dtype=np.uint8)
+  data = data.reshape(fig.canvas.get_width_height()[::-1] + (4,))
+  rgb_data = data[:, :, :3]
   plt.close()
-  return data
+  return rgb_data
 
 
 def plot_alignment_to_numpy(alignment, info=None):
@@ -292,10 +296,12 @@ def plot_alignment_to_numpy(alignment, info=None):
   plt.tight_layout()
 
   fig.canvas.draw()
-  data = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
-  data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+  rgba_buf = fig.canvas.buffer_rgba()
+  data = np.frombuffer(rgba_buf, dtype=np.uint8)
+  data = data.reshape(fig.canvas.get_width_height()[::-1] + (4,))
+  rgb_data = data[:, :, :3]
   plt.close()
-  return data
+  return rgb_data
 
 
 def load_wav_to_torch(full_path):
@@ -426,8 +432,8 @@ def repeat_expand_2d_other(content, target_len, mode = 'nearest'):
 
 def mix_model(model_paths,mix_rate,mode):
   mix_rate = torch.FloatTensor(mix_rate)/100
-  model_tem = torch.load(model_paths[0])
-  models = [torch.load(path)["model"] for path in model_paths]
+  model_tem = torch.load(model_paths[0], weights_only=False)
+  models = [torch.load(path, weights_only=False)["model"] for path in model_paths]
   if mode == 0:
      mix_rate = F.softmax(mix_rate,dim=0)
   for k in model_tem["model"].keys():
@@ -470,7 +476,7 @@ def train_index(spk_name,root_dir = "dataset/44k/"):  #from: RVC https://github.
         raise Exception("You need to run preprocess_hubert_f0.py!")
     npys = []
     for name in sorted(listdir_res):
-        phone = torch.load(name)[0].transpose(-1,-2).numpy()
+        phone = torch.load(name, weights_only=False)[0].transpose(-1,-2).numpy()
         npys.append(phone)
     big_npy = np.concatenate(npys, 0)
     big_npy_idx = np.arange(big_npy.shape[0])

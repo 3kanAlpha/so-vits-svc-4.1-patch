@@ -12,7 +12,7 @@ class DPHubert(SpeechEncoder):
             self.dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         else:
             self.dev = torch.device(device)
-        ckpt = torch.load(vec_path)
+        ckpt = torch.load(vec_path, weights_only=False)
         self.hidden_dim = 768
         self.model = wav2vec2_model(**ckpt["config"]).to(self.dev)
         self.model.load_state_dict(ckpt["state_dict"], strict=False)

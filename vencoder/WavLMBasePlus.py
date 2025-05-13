@@ -8,7 +8,7 @@ class WavLMBasePlus(SpeechEncoder):
     def __init__(self, vec_path="pretrain/WavLM-Base+.pt", device=None):
         super().__init__()
         print("load model(s) from {}".format(vec_path))
-        checkpoint = torch.load(vec_path)
+        checkpoint = torch.load(vec_path, weights_only=False)
         self.cfg = WavLMConfig(checkpoint['cfg'])
         if device is None:
             self.dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")

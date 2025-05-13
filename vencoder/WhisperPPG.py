@@ -12,7 +12,7 @@ class WhisperPPG(SpeechEncoder):
             self.dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         else:
             self.dev = torch.device(device)
-        checkpoint = torch.load(vec_path, map_location=device)
+        checkpoint = torch.load(vec_path, map_location=device, weights_only=False)
         dims = ModelDimensions(**checkpoint["dims"])
         model = Whisper(dims)
         model.load_state_dict(checkpoint["model_state_dict"])

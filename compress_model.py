@@ -30,7 +30,7 @@ def removeOptimizer(config: str, input_model: str, ishalf: bool, output_model: s
                                 betas=hps.train.betas,
                                 eps=hps.train.eps)
 
-    state_dict_g = torch.load(input_model, map_location="cpu")
+    state_dict_g = torch.load(input_model, map_location="cpu", weights_only=False)
     new_dict_g = copyStateDict(state_dict_g)
     keys = []
     for k, v in new_dict_g['model'].items():
