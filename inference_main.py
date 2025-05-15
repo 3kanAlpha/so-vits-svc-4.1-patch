@@ -1,10 +1,14 @@
 import logging
 
 import soundfile
+import torch
+import fairseq.data
 
 from inference import infer_tool
 from inference.infer_tool import Svc
 from spkmix import spk_mix_map
+
+torch.serialization.add_safe_globals([fairseq.data.dictionary.Dictionary])
 
 logging.getLogger('numba').setLevel(logging.WARNING)
 chunks_dict = infer_tool.read_temp("inference/chunks_temp.json")
@@ -16,43 +20,43 @@ def main():
 
     parser = argparse.ArgumentParser(description='sovits4 inference')
 
-    # 一定要设置的部分
-    parser.add_argument('-m', '--model_path', type=str, default="logs/44k/G_37600.pth", help='模型路径')
-    parser.add_argument('-c', '--config_path', type=str, default="logs/44k/config.json", help='配置文件路径')
-    parser.add_argument('-cl', '--clip', type=float, default=0, help='音频强制切片，默认0为自动切片，单位为秒/s')
-    parser.add_argument('-n', '--clean_names', type=str, nargs='+', default=["君の知らない物語-src.wav"], help='wav文件名列表，放在raw文件夹下')
-    parser.add_argument('-t', '--trans', type=int, nargs='+', default=[0], help='音高调整，支持正负（半音）')
-    parser.add_argument('-s', '--spk_list', type=str, nargs='+', default=['buyizi'], help='合成目标说话人名称')
+    # Mandatory parameters
+    parser.add_argument('-m', '--model_path', type=str, default="logs/44k/G_37600.pth", help='Model path')
+    parser.add_argument('-c', '--config_path', type=str, default="logs/44k/config.json", help='Configuration file path')
+    parser.add_argument('-cl', '--clip', type=float, default=0, help='Force audio slicing. Default is 0 for auto slicing. Unit: seconds')
+    parser.add_argument('-n', '--clean_names', type=str, nargs='+', default=["君の知らない物語-src.wav"], help='List of wav file names, should be placed in the raw folder')
+    parser.add_argument('-t', '--trans', type=int, nargs='+', default=[0], help='Pitch adjustment, supports both positive and negative values (in semitones)')
+    parser.add_argument('-s', '--spk_list', type=str, nargs='+', default=['buyizi'], help='Name(s) of target speakers for synthesis')
     
-    # 可选项部分
-    parser.add_argument('-a', '--auto_predict_f0', action='store_true', default=False, help='语音转换自动预测音高，转换歌声时不要打开这个会严重跑调')
-    parser.add_argument('-cm', '--cluster_model_path', type=str, default="", help='聚类模型或特征检索索引路径，留空则自动设为各方案模型的默认路径，如果没有训练聚类或特征检索则随便填')
-    parser.add_argument('-cr', '--cluster_infer_ratio', type=float, default=0, help='聚类方案或特征检索占比，范围0-1，若没有训练聚类模型或特征检索则默认0即可')
-    parser.add_argument('-lg', '--linear_gradient', type=float, default=0, help='两段音频切片的交叉淡入长度，如果强制切片后出现人声不连贯可调整该数值，如果连贯建议采用默认值0，单位为秒')
-    parser.add_argument('-f0p', '--f0_predictor', type=str, default="pm", help='选择F0预测器,可选择crepe,pm,dio,harvest,rmvpe,fcpe默认为pm(注意：crepe为原F0使用均值滤波器)')
-    parser.add_argument('-eh', '--enhance', action='store_true', default=False, help='是否使用NSF_HIFIGAN增强器,该选项对部分训练集少的模型有一定的音质增强效果，但是对训练好的模型有反面效果，默认关闭')
-    parser.add_argument('-shd', '--shallow_diffusion', action='store_true', default=False, help='是否使用浅层扩散，使用后可解决一部分电音问题，默认关闭，该选项打开时，NSF_HIFIGAN增强器将会被禁止')
-    parser.add_argument('-usm', '--use_spk_mix', action='store_true', default=False, help='是否使用角色融合')
-    parser.add_argument('-lea', '--loudness_envelope_adjustment', type=float, default=1, help='输入源响度包络替换输出响度包络融合比例，越靠近1越使用输出响度包络')
-    parser.add_argument('-fr', '--feature_retrieval', action='store_true', default=False, help='是否使用特征检索，如果使用聚类模型将被禁用，且cm与cr参数将会变成特征检索的索引路径与混合比例')
+    # Optional parameters
+    parser.add_argument('-a', '--auto_predict_f0', action='store_true', default=False, help='Automatically predict F0 for voice conversion. Do NOT enable this when converting singing, as it will cause out-of-tune results.')
+    parser.add_argument('-cm', '--cluster_model_path', type=str, default="", help='Path to clustering model or feature retrieval index. Leave empty to automatically use the default path for each model. If clustering or feature retrieval is not trained, fill this arbitrarily.')
+    parser.add_argument('-cr', '--cluster_infer_ratio', type=float, default=0, help='Clustering scheme or feature retrieval ratio, range 0-1. Default to 0 if clustering or feature retrieval model not trained.')
+    parser.add_argument('-lg', '--linear_gradient', type=float, default=0, help='Crossfade length for two audio slices. Adjust if forced slicing causes vocal discontinuity. If smooth, recommend using the default value of 0. Unit: seconds.')
+    parser.add_argument('-f0p', '--f0_predictor', type=str, default="pm", help='Choose F0 predictor: options are crepe, pm, dio, harvest, rmvpe, fcpe. Default is pm. (Note: crepe uses mean filter for original F0)')
+    parser.add_argument('-eh', '--enhance', action='store_true', default=False, help='Use NSF_HIFIGAN enhancer. Can improve audio quality for models with small training sets, but may have negative effects on well-trained models. Disabled by default.')
+    parser.add_argument('-shd', '--shallow_diffusion', action='store_true', default=False, help='Enable shallow diffusion to solve some artifacts/electronic sounds. Disabled by default. When enabled, NSF_HIFIGAN enhancer is disabled.')
+    parser.add_argument('-usm', '--use_spk_mix', action='store_true', default=False, help='Whether to use speaker blending (character fusion)')
+    parser.add_argument('-lea', '--loudness_envelope_adjustment', type=float, default=1, help='Blending ratio for replacing source loudness envelope with output loudness envelope; closer to 1 means more of output envelope is used')
+    parser.add_argument('-fr', '--feature_retrieval', action='store_true', default=False, help='Enable feature retrieval. If enabled, clustering model will be disabled, and parameters cm and cr become the index path and mixing ratio for feature retrieval.')
 
-    # 浅扩散设置
-    parser.add_argument('-dm', '--diffusion_model_path', type=str, default="logs/44k/diffusion/model_0.pt", help='扩散模型路径')
-    parser.add_argument('-dc', '--diffusion_config_path', type=str, default="logs/44k/diffusion/config.yaml", help='扩散模型配置文件路径')
-    parser.add_argument('-ks', '--k_step', type=int, default=100, help='扩散步数，越大越接近扩散模型的结果，默认100')
-    parser.add_argument('-se', '--second_encoding', action='store_true', default=False, help='二次编码，浅扩散前会对原始音频进行二次编码，玄学选项，有时候效果好，有时候效果差')
-    parser.add_argument('-od', '--only_diffusion', action='store_true', default=False, help='纯扩散模式，该模式不会加载sovits模型，以扩散模型推理')
+    # Shallow diffusion settings
+    parser.add_argument('-dm', '--diffusion_model_path', type=str, default="logs/44k/diffusion/model_0.pt", help='Diffusion model path')
+    parser.add_argument('-dc', '--diffusion_config_path', type=str, default="logs/44k/diffusion/config.yaml", help='Diffusion model configuration file path')
+    parser.add_argument('-ks', '--k_step', type=int, default=100, help='Number of diffusion steps. Higher values produce results closer to the diffusion model. Default is 100.')
+    parser.add_argument('-se', '--second_encoding', action='store_true', default=False, help='Double encoding: encodes the original audio a second time before shallow diffusion. An experimental (luck-based) option: sometimes improves, sometimes worsens results.')
+    parser.add_argument('-od', '--only_diffusion', action='store_true', default=False, help='Diffusion-only mode. Sovits model will not be loaded; only the diffusion model will be used for inference.')
     
 
-    # 不用动的部分
-    parser.add_argument('-sd', '--slice_db', type=int, default=-40, help='默认-40，嘈杂的音频可以-30，干声保留呼吸可以-50')
-    parser.add_argument('-d', '--device', type=str, default=None, help='推理设备，None则为自动选择cpu和gpu')
-    parser.add_argument('-ns', '--noice_scale', type=float, default=0.4, help='噪音级别，会影响咬字和音质，较为玄学')
-    parser.add_argument('-p', '--pad_seconds', type=float, default=0.5, help='推理音频pad秒数，由于未知原因开头结尾会有异响，pad一小段静音段后就不会出现')
-    parser.add_argument('-wf', '--wav_format', type=str, default='flac', help='音频输出格式')
-    parser.add_argument('-lgr', '--linear_gradient_retain', type=float, default=0.75, help='自动音频切片后，需要舍弃每段切片的头尾。该参数设置交叉长度保留的比例，范围0-1,左开右闭')
-    parser.add_argument('-eak', '--enhancer_adaptive_key', type=int, default=0, help='使增强器适应更高的音域(单位为半音数)|默认为0')
-    parser.add_argument('-ft', '--f0_filter_threshold', type=float, default=0.05,help='F0过滤阈值，只有使用crepe时有效. 数值范围从0-1. 降低该值可减少跑调概率，但会增加哑音')
+    # Parameters that usually don't need to be changed
+    parser.add_argument('-sd', '--slice_db', type=int, default=-40, help='Default is -40. For noisy audio, set to -30; for dry vocals with breathing, set to -50.')
+    parser.add_argument('-d', '--device', type=str, default=None, help='Inference device. Set to None to automatically select between CPU and GPU.')
+    parser.add_argument('-ns', '--noice_scale', type=float, default=0.4, help='Noise level. Affects articulation and audio quality. Somewhat experimental.')
+    parser.add_argument('-p', '--pad_seconds', type=float, default=0.5, help='Padding seconds for inference audio. Due to unknown reasons, artifacts may appear at the start and end; adding a short silent pad solves this.')
+    parser.add_argument('-wf', '--wav_format', type=str, default='wav', help='Output audio format')
+    parser.add_argument('-lgr', '--linear_gradient_retain', type=float, default=0.75, help='After automatic audio slicing, the head and tail of each slice are discarded. This parameter sets the proportion of crossfade length to retain, range 0-1 (left-open, right-closed interval)')
+    parser.add_argument('-eak', '--enhancer_adaptive_key', type=int, default=0, help='Allows the enhancer to adapt to higher pitch ranges (in semitones). Default is 0.')
+    parser.add_argument('-ft', '--f0_filter_threshold', type=float, default=0.05,help='F0 filtering threshold. Only effective when using crepe. Value range: 0-1. Lowering this value reduces pitch drift probability, but increases muting.')
 
 
     args = parser.parse_args()
